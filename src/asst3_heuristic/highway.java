@@ -79,7 +79,9 @@ public class highway {
 		Random rand = new Random();
 		int dir = rand.nextInt(3);
 		
-		
+		if(b==0){
+			dir = 0;
+		}
 		
 		return hway;
 	}
