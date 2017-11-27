@@ -1,5 +1,15 @@
 package asst3_heuristic;
 
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.GridLayout;
+import java.io.BufferedWriter;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.UnsupportedEncodingException;
+import java.io.Writer;
 import java.util.ArrayList;
 
 //– Use ’0’ to indicate a blocked cell
@@ -9,16 +19,28 @@ import java.util.ArrayList;
 //– Use ’b’ to indicate a hard to traverse cell with a highway
 
 import java.util.Arrays;
+import java.util.PriorityQueue;
 import java.util.Random;
+import java.util.Scanner;
+
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.border.LineBorder;
 
 public class highway {
 	static char[][] map = new char[120][160];
+	static boolean inter = false;
+	static Node s = new Node();
+	static Node g = new Node();
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws UnsupportedEncodingException, FileNotFoundException, IOException {
 		for (char[] r : map) {
 			Arrays.fill(r, '1');
 			// System.out.println(Arrays.toString(r));
 		}
+
+		// hard traversals
 		int[][] hardtravs = new int[8][2];
 		Random rand = new Random();
 		for (int[] r : hardtravs) {
@@ -35,6 +57,7 @@ public class highway {
 			// System.out.println(Arrays.toString(r));
 		}
 
+		// highways
 		int[][] paths = new int[4][2];
 		int bound;
 		ArrayList<int[]> highway;
@@ -85,9 +108,10 @@ public class highway {
 					}
 				}
 			}
-
+			// System.out.println("start" + r[0] + " " + r[1]);
 		}
 
+		// blocked cells
 		int x, y;
 		int ct = 0;
 		while (ct != 3840) {
@@ -101,22 +125,159 @@ public class highway {
 			}
 		}
 
-		for (char[] r : map) {
-			System.out.println(Arrays.toString(r));
+		// start and goal
+		int xg, yg;
+
+		do {
+			if (rand.nextInt(2) == 1) {
+				xg = rand.nextInt(20) + rand.nextInt(2) * 100;
+				yg = rand.nextInt(160);
+				s.x = xg;
+				s.y = yg;
+			} else {
+				xg = rand.nextInt(120);
+				yg = rand.nextInt(20) + rand.nextInt(2) * 140;
+				s.x = xg;
+				s.y = yg;
+			}
+
+			if (rand.nextInt(2) == 1) {
+				xg = rand.nextInt(20) + rand.nextInt(2) * 100;
+				yg = rand.nextInt(160);
+				g.x = xg;
+				g.y = yg;
+			} else {
+				xg = rand.nextInt(120);
+				yg = rand.nextInt(20) + rand.nextInt(2) * 140;
+				g.x = xg;
+				g.y = yg;
+			}
+		} while (dist(s, g) < 100 || map[s.x][s.y] == '0' || map[g.x][g.y] == '0');
+
+		// to file
+		try (Writer writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("map.txt"), "utf-8"))) {
+			writer.write(s.toString() + System.lineSeparator());
+			writer.write(g.toString() + System.lineSeparator());
+			for (int[] r : hardtravs) {
+				writer.write(Arrays.toString(r) + System.lineSeparator());
+			}
+			for (char[] r : map) {
+				writer.write(Arrays.toString(r) + System.lineSeparator());
+				// System.out.println(Arrays.toString(r));
+			}
 		}
+		ArrayList<Node> world = new ArrayList<Node>();
+		Node v, n;
+		for (int i = 0; i < 120; i++) {
+			for (int j = 0; j < 160; j++) {
+				v = new Node(i, j);
+				if (map[i][j] != '0') {
+					for (int k = i - 1; k <= i + 1; k++) {
+						for (int m = j - 1; m <= j + 1; m++) {
+							if (k >= 0 && k < 120 && m >= 0 && m < 160) {
+								if (!(i == k && j == m) && map[k][m] != '0') {
+									// System.out.println(i + " " + j);
+									n = new Node(k, m);
+									int[] to = { v.x, v.y };
+									int[] from = { n.x, n.y };
+									n.cost = cost(to, from);
+									n.parent = v;
+									v.neighbors.add(n);
+								}
+							}
+						}
+					}
+				}
+				world.add(v);
+			}
+		}
+		
+		System.out.println(aStar(s, g));
+		
+		//draw spath
+		for(Node q: spath){
+			map[q.x][q.y] = 'p';
+		}
+		
+		map[s.x][s.y] = 's';
+		map[g.x][g.y] = 'g';
+		
+		draw();
+		
+		Scanner scan = new Scanner(System.in);
+		
+		while(true){
+			System.out.print("row: ");
+			int r = Integer.parseInt(scan.nextLine());
+			System.out.print("column: ");
+			int c = Integer.parseInt(scan.nextLine());
+			Node temp = new Node(r,c);
+			if(spath.contains(temp)){
+				temp = spath.get(spath.indexOf(temp));
+				System.out.println("h: " + temp.h + " g: " + temp.g +" f: "+temp.f);
+			}
+		}
+	}
+	
+	public static ArrayList<Node> spath = new ArrayList<Node>();
+
+	public static double cost(int[] s, int[] g) {
+		// regular unblocked
+		if (map[s[0]][s[1]] == '1' && map[g[0]][g[1]] == '1') {
+			if (s[0] == g[0] || s[1] == g[1]) {
+				return 1;
+			} else {
+				return Math.sqrt(2);
+			}
+		}
+		// hard to traverse
+		if (map[s[0]][s[1]] == '2' && map[g[0]][g[1]] == '2') {
+			if (s[0] == g[0] || s[1] == g[1]) {
+				return 2;
+			} else {
+				return Math.sqrt(8);
+			}
+		}
+		// unblocked to hard
+		if ((map[s[0]][s[1]] == '1' && map[g[0]][g[1]] == '2') || (map[s[0]][s[1]] == '2' && map[g[0]][g[1]] == '1')) {
+			if (s[0] == g[0] || s[1] == g[1]) {
+				return 1.5;
+			} else {
+				return (Math.sqrt(2) + Math.sqrt(8)) / 2;
+			}
+		}
+
+		// highways
+		// regular unblocked
+		if (map[s[0]][s[1]] == 'a' && map[g[0]][g[1]] == 'a') {
+			return .25;
+		}
+		// hard to traverse
+		if (map[s[0]][s[1]] == 'b' && map[g[0]][g[1]] == 'b') {
+			return .5;
+		}
+		// unblocked to hard
+		if ((map[s[0]][s[1]] == 'a' && map[g[0]][g[1]] == 'b') || (map[s[0]][s[1]] == 'b' && map[g[0]][g[1]] == 'a')) {
+			return .375;
+		}
+
+		return 0;
 	}
 
 	public static ArrayList<int[]> createHighway(int x, int y, int b) {
 		ArrayList<int[]> hway = new ArrayList<int[]>();
 		Random rand = new Random();
-		int[] dirs = { 0, 1, -1 };
-		int dir = dirs[rand.nextInt(3)];
-		int i, j, ct = 0;
-		boolean inter = false;
-		while (ct < 100 && !inter) {
+		// int[] dirs = { 0, 1, -1 };
+		int dir = 0;
+		int i, j, ct = 0, to = 0;
+
+		while (ct < 100 || inter) {
+			inter = false;
 			i = x;
 			j = y;
 			ct = 0;
+			if (to > 20000)
+				break;
 			hway = new ArrayList<int[]>();
 			do {
 				for (int p = 0; p < 20; p++) {
@@ -132,7 +293,7 @@ public class highway {
 						j += dir;
 						if (dir == 0)
 							i--;
-					} else {
+					} else if (b == 3) {
 						i += dir;
 						if (dir == 0)
 							j++;
@@ -140,7 +301,8 @@ public class highway {
 					if (i == -1 || i == 120 || j == -1 || j == 160)
 						break;
 					int[] pt = { i, j };
-					if(map[i][j]=='a' || map[i][j]=='b') inter = true;
+					if (map[i][j] == 'a' || map[i][j] == 'b')
+						inter = true;
 					hway.add(pt);
 					ct++;
 					// System.out.println(i + " " + j);
@@ -153,10 +315,145 @@ public class highway {
 					newdir.add(-1);
 					newdir.remove(Integer.valueOf(dir));
 					dir = newdir.get(rand.nextInt(2));
+					// System.out.println("new direction " + dir);
 				}
+				to++;
+				if (to > 20000)
+					break;
 			} while (i >= 0 && i < 120 && j >= 0 && j < 160);
 		}
 
 		return hway;
+	}
+
+	public static double g(Node g) {
+		return dist(s,g);
+	}
+
+	public static double h(Node h) {
+		return dist(h,g);
+	}
+
+	public static Node succ(Node su) {
+		int i = su.x;
+		int j = su.y;
+		Node n;
+		if (map[i][j] != '0') {
+			for (int k = i - 1; k <= i + 1; k++) {
+				for (int m = j - 1; m <= j + 1; m++) {
+					if (k >= 0 && k < 120 && m >= 0 && m < 160) {
+						if (!(i == k && j == m) && map[k][m] != '0') {
+							// System.out.println(i + " " + j);
+							n = new Node(k, m);
+							su.neighbors.add(n);
+						}
+					}
+				}
+			}
+		}
+		return su;
+	}
+
+	static PriorityQueue<Node> open = new PriorityQueue<Node>(20, (a, b) -> Double.compare(a.f, b.f));
+
+	public static boolean aStar(Node start, Node goal) {
+		ArrayList<Node> closed = new ArrayList<Node>();
+		start.g = 0;
+		start.parent = start;
+		
+		//System.out.println(dist(start,goal));
+		start.f = start.g + dist(start,goal);
+		open.add(start);
+
+		Node curr = new Node();
+		while (!open.isEmpty()) {
+			curr = open.poll();
+			//spath.add(curr);
+			//System.out.println(curr.toString());
+			if (curr.equals(goal)) {
+				return true;
+			}
+			closed.add(curr);
+			curr = succ(curr);
+			
+			for (Node s : curr.neighbors) {
+				//System.out.println(s.toString());
+				if (!closed.contains(s)) {
+					if (!open.contains(s)) {
+						s.g = Double.POSITIVE_INFINITY;
+						s.parent = null;
+					}
+					UpdateVertex(curr, s);
+				}
+			}
+		}
+
+		return false;
+	}
+
+	public static void UpdateVertex(Node curr, Node s) {
+		int[] to = { curr.x, curr.y };
+		int[] from = { s.x, s.y };
+		if (g(curr) + cost(to, from) < s.g) {
+			s.g = g(curr) + cost(to, from);
+			s.parent = curr;
+			spath.add(curr);
+			if (open.contains(s)) {
+				open.remove(s);
+			}
+			s.f = g(s) + h(s);
+			open.add(s);
+			System.out.println(s+" added to fringe");
+		}
+	}
+
+	public static double dist(Node s, Node g) {
+		return Math.sqrt(Math.pow(g.x - s.x, 2) + Math.pow(g.y - s.y, 2));
+	}
+
+	public static void draw() {
+		JPanel panel = new JPanel();
+		panel.setLayout(new GridLayout(120, 160));
+		JLabel[][] grid = new JLabel[120][160];
+		for (int i = 0; i < 120; i++) {
+			for (int j = 0; j < 160; j++) {
+				grid[i][j] = new JLabel();
+				grid[i][j].setBorder(new LineBorder(Color.BLACK));
+				switch (map[i][j]) {
+				case '1':
+					grid[i][j].setBackground(Color.lightGray);
+					break;
+				case '0':
+					grid[i][j].setBackground(Color.black);
+					break;
+				case 'a':
+					grid[i][j].setBackground(Color.blue);
+					break;
+				case 'b':
+					grid[i][j].setBackground(Color.cyan);
+					break;
+				case '2':
+					grid[i][j].setBackground(Color.orange);
+					break;
+				case 's':
+					grid[i][j].setBackground(Color.red);
+					break;
+				case 'g':
+					grid[i][j].setBackground(Color.green);
+					break;
+				case 'p':
+					grid[i][j].setBackground(Color.pink);
+					break;
+				}
+				grid[i][j].setOpaque(true);
+				panel.add(grid[i][j]);
+			}
+		}
+		JFrame frame = new JFrame("Map");
+		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		frame.setPreferredSize(new Dimension(1024, 720));
+		frame.add(panel);
+		frame.pack();
+		frame.setVisible(true);
 	}
 }
