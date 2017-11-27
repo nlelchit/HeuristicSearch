@@ -23,6 +23,11 @@ public class Node {
 		x = 0;
 		y = 0;
 	}
+	
+	public Node(Node n){
+		this.x = n.x;
+		this.y = n.y;
+	}
 
 	public String toString() {
 		return "[" + x + "," + y + "]";
